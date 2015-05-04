@@ -3,6 +3,8 @@
 MATRIX_SIZE = 8    #  matrix will be MATRIX_SIZE x MATRIX_SIZE
 MAX_ITER = 100 # amount of additions of rows multipied by coefficient
 OUTPUT_FILE_NAME = "data/random_linear_system.txt"
+AMOUNT_OF_FILES_TO_SPLIT = None
+SPLIT_FILE_NAME_TEMPLATE = "data/ps/p"
 
 B_VECTOR_NUMBERS_AMPLITUDE = 10.0   #max (and min = -max) values of b vector random numbers
 ITER_MAX_COEF_AMPLITUDE = 2.5      #max (and min = -max) values of coefficients for iterations (multiplication)
@@ -21,6 +23,10 @@ def parse_input_args():
 	                    	+ "row is multiplied by coefficients and is added to another"))
 	parser.add_argument("-o", "--outfile", type=int,
 	                    help="output file to write generated matrix")
+	parser.add_argument("-n", "--nsplit", type=int,
+	                    help="amount of files to split matrix")
+	parser.add_argument("-t", "--split_template", type=int,
+	                    help="template name for split file")
 	args = parser.parse_args()
 
 	global MATRIX_SIZE
@@ -41,7 +47,19 @@ def parse_input_args():
 
 	global OUTPUT_FILE_NAME
 	if args.outfile != None:
-		OUTPUT_FILE_NAME = outfile
+		OUTPUT_FILE_NAME = args.outfile
+
+	global AMOUNT_OF_FILES_TO_SPLIT
+	if args.nsplit != None:
+		if args.nsplit > 1 and args.nsplit <= MATRIX_SIZE:
+			AMOUNT_OF_FILES_TO_SPLIT = args.nsplit
+		else:
+			print "Error. Number of files to split into must be greater than 1 and less or equal than matrix size"
+			sys.exit(1)
+
+	global SPLIT_FILE_NAME_TEMPLATE
+	if args.split_template != None:
+		SPLIT_FILE_NAME_TEMPLATE = args.split_template
 
 
 def system_to_str(A, b):
@@ -51,6 +69,11 @@ def system_to_str(A, b):
 
 	system_str += "\nb: " + str(b)
 	return system_str
+
+def write_row_in_file(outfile, row, b):
+	for i in row:
+		outfile.write(str(i) + " ")
+	outfile.write(str(b) + "\n")
 
 
 def main():
@@ -102,6 +125,27 @@ def main():
 	out.write(system_to_str(A, b))
 	out.write("\n\n\nCorrect answers:\n")
 	out.write(str(answers_vector))
+	out.close()
+
+
+	#split generated matrix into several files
+	if AMOUNT_OF_FILES_TO_SPLIT != None:
+		# part_size = MATRIX_SIZE / AMOUNT_OF_FILES_TO_SPLIT
+		split_files = []
+		for i in range(AMOUNT_OF_FILES_TO_SPLIT):
+			fname = SPLIT_FILE_NAME_TEMPLATE + str(i)
+			directory = os.path.dirname(fname)
+			if not os.path.exists(directory):
+			    os.makedirs(directory)
+			split_file = open(fname, "w")
+			split_files.append(split_file)
+
+		for i in range(MATRIX_SIZE):
+			split_file_index = i % AMOUNT_OF_FILES_TO_SPLIT
+			write_row_in_file(split_files[split_file_index], A[i], b[i])
+
+		for i in range(AMOUNT_OF_FILES_TO_SPLIT):
+			split_files[i].close()
 
 
 if __name__ == '__main__':
