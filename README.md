@@ -8,11 +8,11 @@ https://jetcracker.wordpress.com/2012/03/01/how-to-install-mpi-in-ubuntu/
 
 To compile mpi lab:
 ```
-mpicc labmpi.c -o labmpi -std=c99 -lm
+mpicc lab4.c -o lab4 -std=c99 -lm
 ```
 To run:
 ```
-mpirun -np 6 ./labmpi
+mpirun -np 6 ./lab4
 ```
 
 To compile OpenMP:
