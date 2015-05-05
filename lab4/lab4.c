@@ -1,3 +1,5 @@
+//proc is process
+
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +13,7 @@
 #define FILENAME_TEMPLATE "data/ps/p%d"
 
 #define allocate(type, size) (type*)malloc(sizeof(type) * size)
+#define fill_array(arr, size, default_value) for (int i = 0; i < size; ++i) {arr[i] = default_value;}
 
 typedef struct advanced_row
 {
@@ -22,6 +25,8 @@ typedef struct advanced_row
 
 
 void print_advanced_row(advanced_row a_row);
+int is_almost_zero(double value);
+// int find_proc_with_appropriate_row();
 
 
 int main (int argc, char* argv[])
@@ -113,15 +118,91 @@ int main (int argc, char* argv[])
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	if(rank == 0) {
+	if(rank == 0) 
+	{
 		printf("all processes were initialized");
 	}
 
+	int iterations_completed = 0
 
 
-	// if (rank == 0) {
-	// 	MPI_
-	// }
+	int first_part_iters_amount = MATRIX_SIZE - 1  //amount of iterations to make matrix low-triangle
+
+
+	int next_proc = 0;   //next proc that will send row. it's iterated to make calculations more evenly distributed
+	for (int i = 0; i < first_part_iters_amount; ++i)
+	{
+		int is_there_appropriate_row = 0;   //variable defines is there row to be sent in current process
+											//appropriate row is row that hasn't been sent yet
+		for (int i = 0; i < rows_amount; ++i)
+		{
+			if (adv_rows[i].was_sent == 0 && !is_almost_zero(adv_rows[i][iterations_completed]))
+			{
+				is_there_appropriate_row = 1;
+				break;
+			}
+		}
+
+		int* can_procs_be_senders;   //variable is used in process #0. 
+									//it's array, if arr[i] = 1 then proc #i has appropriate row
+
+		if (rank == 0)
+		{
+			can_procs_be_senders = allocate(int, PROCS_AMOUNT);
+		}
+
+		MPI_Gather(&is_there_appropriate_row, 1, MPI_INT,
+					&can_procs_be_senders, 1, MPI_INT
+					0, MPI_COMM_WORLD);
+
+
+		int* array_with_checked_proc = allocate(int, PROCS_AMOUNT);  //array, all elements of which are 0s
+								//except one element which is 1 - index of 1 is checked process
+								//array will be used in MPI_Scatter function
+								//it will be filled in proc #0
+								//and then received by others procs
+
+
+		if(rank == 0) 
+		{
+			int attempts_amount = 0;   //if attempts_amount is bigger that amount of procs - it means
+				//that in every row number with current index is equal (or almost equal - look at ALMOST_ZERO ) to zero
+				//so system can't be solved or it is linearly dependent
+
+			int chosen_proc_id = -1;  //if there won't be found appropriate proc variable will be equal to -1
+			
+			for (; attempts_amount < PROCS_AMOUNT; ++attempts_amount) //loop for finding proc that has appropriate row
+			{
+				if (can_procs_be_senders[next_proc])
+				{
+					chosen_proc_id = next_proc++;
+					break;
+				}
+			}
+
+			if (chosen_proc_id == -1)
+			{
+				printf("Error. There is no appropriate row.\n");
+				printf("System of equations can't be solved or it is linearly dependent\n");
+				return 1;
+			}
+
+			// array_with_checked_proc = allocate(int, PROCS_AMOUNT);
+			fill_array(array_with_checked_proc, PROCS_AMOUNT, 0);
+			array_with_checked_proc[chosen_proc_id] = 1;
+			
+		}
+
+		int proc_checked_to_send_row;    // checks if this proc is checked for sending row to others
+
+		MPI_Bcast(array_with_checked_proc, 1, MPI_INT, 
+					proc_checked_to_send_row, 1, MPI_INT,
+					0, MPI_COMM_WORLD);
+
+		int sender_proc_id
+
+	}
+	
 
 
 
@@ -133,6 +214,13 @@ int main (int argc, char* argv[])
 	MPI_Finalize();
 	return 0;
 }
+
+int is_almost_zero(double value)
+{
+	return fabs(value) < ALMOST_ZERO;
+}
+
+// int find_proc_with_appropriate_row();
 
 void print_advanced_row(advanced_row a_row)
 {
