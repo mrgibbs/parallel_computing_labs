@@ -198,13 +198,14 @@ int main (int argc, char* argv[])
 			
 			for (; attempts_amount < PROCS_AMOUNT; ++attempts_amount) //loop for finding proc that has appropriate row
 			{
-				if (can_procs_be_senders[next_proc])
+				int prev_proc = next_proc;
+				next_proc = (next_proc + 1) % PROCS_AMOUNT;
+				if (can_procs_be_senders[prev_proc])
 				{
-					chosen_proc_id = next_proc;
+					chosen_proc_id = prev_proc;
 					break;
 				}
 
-				next_proc = (next_proc + 1) % PROCS_AMOUNT;
 			}
 
 			if (chosen_proc_id == -1)
