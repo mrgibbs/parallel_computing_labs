@@ -26,6 +26,8 @@ typedef struct advanced_row
 
 void print_advanced_row(advanced_row a_row);
 int is_almost_zero(double value);
+void elimination_iteration(double* row_for_elim, advanced_row* adv_rows_to_elim, 
+							int adv_rows_to_elim_size, int row_size, int iterations_completed);
 // int find_proc_with_appropriate_row();
 
 
@@ -98,6 +100,8 @@ int main (int argc, char* argv[])
 		--rows_amount; 
 	}
 
+	printf("proc #%d   rows_amount: %d\n", rank, rows_amount);
+
 	//init advanced_rows
 	advanced_row* adv_rows = allocate(advanced_row, rows_amount);
 	for (int i = 0; i < rows_amount; ++i)
@@ -109,36 +113,40 @@ int main (int argc, char* argv[])
 	}
 
 
-	//print advanced rows
-	for (int i = 0; i < rows_amount; ++i)
-	{
-		print_advanced_row(adv_rows[i]);
-	}
+	// //print advanced rows
+	// for (int i = 0; i < rows_amount; ++i)
+	// {
+	// 	print_advanced_row(adv_rows[i]);
+	// }
 
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	if(rank == 0) 
 	{
-		printf("all processes were initialized");
+		printf("all processes were initialized\n");
 	}
 
-	int iterations_completed = 0
+	int iterations_completed = 0;
 
 
-	int first_part_iters_amount = MATRIX_SIZE - 1  //amount of iterations to make matrix low-triangle
+	int first_part_iters_amount = MATRIX_SIZE - 1;  //amount of iterations to make matrix low-triangle
 
 
 	int next_proc = 0;   //next proc that will send row. it's iterated to make calculations more evenly distributed
-	for (int i = 0; i < first_part_iters_amount; ++i)
+	for (int first_part_iter = 0; first_part_iter < first_part_iters_amount; ++first_part_iter)
 	{
 		int is_there_appropriate_row = 0;   //variable defines is there row to be sent in current process
 											//appropriate row is row that hasn't been sent yet
+
+		int appropriate_row_index = -1;
+
 		for (int i = 0; i < rows_amount; ++i)
 		{
-			if (adv_rows[i].was_sent == 0 && !is_almost_zero(adv_rows[i][iterations_completed]))
+			if (adv_rows[i].was_sent == 0 && !is_almost_zero(adv_rows[i].row[iterations_completed]))
 			{
 				is_there_appropriate_row = 1;
+				appropriate_row_index = i;
 				break;
 			}
 		}
@@ -149,22 +157,39 @@ int main (int argc, char* argv[])
 		if (rank == 0)
 		{
 			can_procs_be_senders = allocate(int, PROCS_AMOUNT);
+
 		}
 
+		printf("proc #%d before gather_1   is_app_row: %d\n", rank, is_there_appropriate_row);  //debugging
+
+
 		MPI_Gather(&is_there_appropriate_row, 1, MPI_INT,
-					&can_procs_be_senders, 1, MPI_INT
+					can_procs_be_senders, 1, MPI_INT,
 					0, MPI_COMM_WORLD);
 
 
-		int* array_with_checked_proc = allocate(int, PROCS_AMOUNT);  //array, all elements of which are 0s
-								//except one element which is 1 - index of 1 is checked process
-								//array will be used in MPI_Scatter function
-								//it will be filled in proc #0
-								//and then received by others procs
+		// printf("proc #%d after gather_1\n", rank);  //debugging
+
+
+		// int* array_with_checked_proc = allocate(int, PROCS_AMOUNT);  //array, all elements of which are 0s
+		// 						//except one element which is 1 - index of 1 is checked process
+		// 						//array will be used in MPI_Scatter function
+		// 						//it will be filled in proc #0
+		// 						//and then received by others procs
+
+		int proc_checked_to_send_row; // checks if this proc is checked for sending row to others
 
 
 		if(rank == 0) 
 		{
+			// //debugging section start
+			// printf("proc #0    value1: %d\n", can_procs_be_senders[0]);
+			// int a = can_procs_be_senders[0];
+			// printf("proc #0 debugging a1.  procs_amount: %d\n", PROCS_AMOUNT);
+			// printf("proc #0 debugging: %d  %d  %d\n", can_procs_be_senders[0], 
+			// 	can_procs_be_senders[1], can_procs_be_senders[2]);  //debugging section end
+
+
 			int attempts_amount = 0;   //if attempts_amount is bigger that amount of procs - it means
 				//that in every row number with current index is equal (or almost equal - look at ALMOST_ZERO ) to zero
 				//so system can't be solved or it is linearly dependent
@@ -175,9 +200,11 @@ int main (int argc, char* argv[])
 			{
 				if (can_procs_be_senders[next_proc])
 				{
-					chosen_proc_id = next_proc++;
+					chosen_proc_id = next_proc;
 					break;
 				}
+
+				next_proc = (next_proc + 1) % PROCS_AMOUNT;
 			}
 
 			if (chosen_proc_id == -1)
@@ -187,19 +214,53 @@ int main (int argc, char* argv[])
 				return 1;
 			}
 
+			proc_checked_to_send_row = chosen_proc_id;
+
+			printf("proc #%d   chosen proc = %d\n", rank, proc_checked_to_send_row);
+
 			// array_with_checked_proc = allocate(int, PROCS_AMOUNT);
-			fill_array(array_with_checked_proc, PROCS_AMOUNT, 0);
-			array_with_checked_proc[chosen_proc_id] = 1;
+			// fill_array(array_with_checked_proc, PROCS_AMOUNT, 0);
+			// array_with_checked_proc[chosen_proc_id] = 1;
 			
+		}  
+
+		// printf("proc #%d before bcast_1\n", rank);  //debugging
+
+		MPI_Bcast(&proc_checked_to_send_row, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+		printf("proc #%d after bcast_1\n", rank);  //debugging
+
+		double* row_for_eliminating = allocate(double, ROW_SIZE);
+
+		if (rank == proc_checked_to_send_row)
+		{
+			adv_rows[appropriate_row_index].was_sent = 1;
+			row_for_eliminating = adv_rows[appropriate_row_index].row;
 		}
 
-		int proc_checked_to_send_row;    // checks if this proc is checked for sending row to others
+		MPI_Bcast(row_for_eliminating, ROW_SIZE, MPI_DOUBLE, proc_checked_to_send_row, MPI_COMM_WORLD);
 
-		MPI_Bcast(array_with_checked_proc, 1, MPI_INT, 
-					proc_checked_to_send_row, 1, MPI_INT,
-					0, MPI_COMM_WORLD);
+		printf("proc #%d after bcast_2\n", rank);  //debugging
 
-		int sender_proc_id
+		elimination_iteration(row_for_eliminating, adv_rows, rows_amount, ROW_SIZE, iterations_completed);
+
+
+		for (int i = 0; i < PROCS_AMOUNT; ++i)
+		{
+			MPI_Barrier(MPI_COMM_WORLD);
+			if (rank == i)
+			{
+				printf("\n\n\nproc #%d    iter #%d:\n", rank, iterations_completed);
+				for (int i = 0; i < rows_amount; ++i)
+				{
+					print_advanced_row(adv_rows[i]);	
+				}
+			}
+		}
+
+		printf("proc #%d before end of iteration\n", rank);  //debugging
+
+		iterations_completed++;
 
 	}
 	
@@ -213,6 +274,27 @@ int main (int argc, char* argv[])
 
 	MPI_Finalize();
 	return 0;
+}
+
+void elimination_iteration(double* row_for_elim, advanced_row* adv_rows_to_elim, 
+							int adv_rows_to_elim_size, int row_size, int iterations_completed)
+{
+	for (int i = 0; i < adv_rows_to_elim_size; ++i)
+	{
+		if (adv_rows_to_elim[i].was_sent == 1)
+		{
+			continue;
+		}
+
+		double* row_to_elim = adv_rows_to_elim[i].row;
+		double coef = -1.0 * row_to_elim[iterations_completed] / row_for_elim[iterations_completed];
+
+		for (int i = iterations_completed; i < row_size; ++i)
+		{
+			row_to_elim[i] += coef * row_for_elim[i];
+		}
+
+	}
 }
 
 int is_almost_zero(double value)
