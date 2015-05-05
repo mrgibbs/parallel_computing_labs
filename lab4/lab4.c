@@ -28,6 +28,7 @@ void print_advanced_row(advanced_row a_row);
 int is_almost_zero(double value);
 void elimination_iteration(double* row_for_elim, advanced_row* adv_rows_to_elim, 
 							int adv_rows_to_elim_size, int row_size, int iterations_completed);
+void divide_row_by_number(double* row, int start_index, int row_size, double divider);
 // int find_proc_with_appropriate_row();
 
 
@@ -246,24 +247,47 @@ int main (int argc, char* argv[])
 		elimination_iteration(row_for_eliminating, adv_rows, rows_amount, ROW_SIZE, iterations_completed);
 
 
-		for (int i = 0; i < PROCS_AMOUNT; ++i)
-		{
-			MPI_Barrier(MPI_COMM_WORLD);
-			if (rank == i)
-			{
-				printf("\n\n\nproc #%d    iter #%d:\n", rank, iterations_completed);
-				for (int i = 0; i < rows_amount; ++i)
-				{
-					print_advanced_row(adv_rows[i]);	
-				}
-			}
-		}
+		// //print all rows
+		// for (int i = 0; i < PROCS_AMOUNT; ++i)
+		// {
+		// 	MPI_Barrier(MPI_COMM_WORLD);
+		// 	if (rank == i)
+		// 	{
+		// 		printf("\n\n\nproc #%d    iter #%d:\n", rank, iterations_completed);
+		// 		for (int i = 0; i < rows_amount; ++i)
+		// 		{
+		// 			print_advanced_row(adv_rows[i]);	
+		// 		}
+		// 	}
+		// }
 
-		printf("proc #%d before end of iteration\n", rank);  //debugging
+		// printf("proc #%d before end of iteration\n", rank);  //debugging
 
 		iterations_completed++;
 
 	}
+
+	for (int i = 0; i < rows_amount; ++i)   //loop to make diagonal elements equal to 1
+	{
+		divide_row_by_number(adv_rows[i].row, adv_rows[i].iters_passed, 
+								ROW_SIZE, adv_rows[i].row[adv_rows[i].iters_passed]);
+	}
+
+
+
+	// //print all rows
+	// for (int i = 0; i < PROCS_AMOUNT; ++i)
+	// {
+	// 	MPI_Barrier(MPI_COMM_WORLD);
+	// 	if (rank == i)
+	// 	{
+	// 		printf("\n\n\nproc #%d    iter #%d:\n", rank, iterations_completed);
+	// 		for (int i = 0; i < rows_amount; ++i)
+	// 		{
+	// 			print_advanced_row(adv_rows[i]);	
+	// 		}
+	// 	}
+	// }
 	
 
 
@@ -275,6 +299,14 @@ int main (int argc, char* argv[])
 
 	MPI_Finalize();
 	return 0;
+}
+
+void divide_row_by_number(double* row, int start_index, int row_size, double divider)
+{
+	for (int i = start_index; i < row_size; ++i)
+	{
+		row[i] /= divider;
+	}
 }
 
 void elimination_iteration(double* row_for_elim, advanced_row* adv_rows_to_elim, 
@@ -294,6 +326,8 @@ void elimination_iteration(double* row_for_elim, advanced_row* adv_rows_to_elim,
 		{
 			row_to_elim[i] += coef * row_for_elim[i];
 		}
+
+		adv_rows_to_elim[i].iters_passed++;
 
 	}
 }
@@ -317,3 +351,4 @@ void print_advanced_row(advanced_row a_row)
 	}
 	printf("\n");
 }
+
