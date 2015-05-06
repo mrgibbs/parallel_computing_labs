@@ -1,5 +1,12 @@
 # parallel_computing_labs
 
+
+To compile lab4
+
+```
+mpicc lab4.c -o lab4 -std=c99 -lm -fopenmp
+```
+
 To install MPI on Ubuntu:
 
 ```
