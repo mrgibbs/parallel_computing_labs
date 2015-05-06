@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define MATRIX_SIZE 8
+#define MATRIX_SIZE 1000
 
 #define ALMOST_ZERO 0.0000001
 
@@ -161,7 +161,7 @@ int main (int argc, char* argv[])
 
 		}
 
-		printf("proc #%d before gather_1   is_app_row: %d\n", rank, is_there_appropriate_row);  //debugging
+		// printf("proc #%d before gather_1   is_app_row: %d\n", rank, is_there_appropriate_row);  //debugging
 
 
 		MPI_Gather(&is_there_appropriate_row, 1, MPI_INT,
@@ -218,7 +218,7 @@ int main (int argc, char* argv[])
 
 			proc_checked_to_send_row = chosen_proc_id;
 
-			printf("proc #%d   chosen proc = %d\n", rank, proc_checked_to_send_row);
+			// printf("proc #%d   chosen proc = %d\n", rank, proc_checked_to_send_row);
 
 			// array_with_checked_proc = allocate(int, PROCS_AMOUNT);
 			// fill_array(array_with_checked_proc, PROCS_AMOUNT, 0);
@@ -230,7 +230,7 @@ int main (int argc, char* argv[])
 
 		MPI_Bcast(&proc_checked_to_send_row, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-		printf("proc #%d after bcast_1\n", rank);  //debugging
+		// printf("proc #%d after bcast_1\n", rank);  //debugging
 
 		double* row_for_eliminating = allocate(double, ROW_SIZE);
 
@@ -242,7 +242,7 @@ int main (int argc, char* argv[])
 
 		MPI_Bcast(row_for_eliminating, ROW_SIZE, MPI_DOUBLE, proc_checked_to_send_row, MPI_COMM_WORLD);
 
-		printf("proc #%d after bcast_2\n", rank);  //debugging
+		// printf("proc #%d after bcast_2\n", rank);  //debugging
 
 		elimination_iteration(row_for_eliminating, adv_rows, rows_amount, ROW_SIZE, iterations_completed);
 
@@ -265,6 +265,11 @@ int main (int argc, char* argv[])
 
 		iterations_completed++;
 
+		if (rank == 0)
+		{
+			printf("iters_passed: %d\n", iterations_completed);
+		}
+
 	}
 
 	for (int i = 0; i < rows_amount; ++i)   //loop to make diagonal elements equal to 1
@@ -274,35 +279,20 @@ int main (int argc, char* argv[])
 	}
 
 
-
-	//print all rows
-	for (int i = 0; i < PROCS_AMOUNT; ++i)
-	{
-		MPI_Barrier(MPI_COMM_WORLD);
-		if (rank == i)
-		{
-			printf("\n\n\nproc #%d    iter #%d:\n", rank, iterations_completed);
-			for (int i = 0; i < rows_amount; ++i)
-			{
-				print_advanced_row(adv_rows[i]);	
-			}
-		}
-	}
+	// //print all rows
+	// for (int i = 0; i < PROCS_AMOUNT; ++i)
+	// {
+	// 	MPI_Barrier(MPI_COMM_WORLD);
+	// 	if (rank == i)
+	// 	{
+	// 		printf("\n\n\nproc #%d    iter #%d:\n", rank, iterations_completed);
+	// 		for (int i = 0; i < rows_amount; ++i)
+	// 		{
+	// 			print_advanced_row(adv_rows[i]);	
+	// 		}
+	// 	}
+	// }
 	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 	int second_part_iters_amount = MATRIX_SIZE - 1;  //amount of iterations to make matrix diagonal with 1s 
 							//identity matrix
@@ -389,21 +379,26 @@ int main (int argc, char* argv[])
 		// printf("proc #%d after bcast_1\n", rank);  //debugging
 
 
-		//print all rows
-		for (int i = 0; i < PROCS_AMOUNT; ++i)
-		{
-			MPI_Barrier(MPI_COMM_WORLD);
-			if (rank == i)
-			{
-				printf("\n\n\nproc #%d    iter #%d:\n", rank, iterations_completed);
-				for (int i = 0; i < rows_amount; ++i)
-				{
-					print_advanced_row(adv_rows[i]);	
-				}
-			}
-		}
+		// //print all rows
+		// for (int i = 0; i < PROCS_AMOUNT; ++i)
+		// {
+		// 	MPI_Barrier(MPI_COMM_WORLD);
+		// 	if (rank == i)
+		// 	{
+		// 		printf("\n\n\nproc #%d    iter #%d:\n", rank, iterations_completed);
+		// 		for (int i = 0; i < rows_amount; ++i)
+		// 		{
+		// 			print_advanced_row(adv_rows[i]);	
+		// 		}
+		// 	}
+		// }
 
 		iterations_completed++;
+
+		if (rank == 0)
+		{
+			printf("iters_passed (reverse): %d\n", iterations_completed);
+		}
 	}
 
 
@@ -419,32 +414,10 @@ int main (int argc, char* argv[])
 		{
 			if (adv_rows[j].iters_passed == i)
 			{
-				printf("x%d = %lf\n", i, adv_rows[j].row[ROW_SIZE - 1]);
+				printf("x%d = %lf\n", i + 1, adv_rows[j].row[ROW_SIZE - 1]);
 			}	
 		}
 	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 	MPI_Finalize();
 	return 0;
@@ -452,6 +425,7 @@ int main (int argc, char* argv[])
 
 void divide_row_by_number(double* row, int start_index, int row_size, double divider)
 {
+	#pragma omp parallel for
 	for (int i = start_index; i < row_size; ++i)
 	{
 		row[i] /= divider;
@@ -461,6 +435,7 @@ void divide_row_by_number(double* row, int start_index, int row_size, double div
 void elimination_iteration(double* row_for_elim, advanced_row* adv_rows_to_elim, 
 							int adv_rows_to_elim_size, int row_size, int iterations_completed)
 {
+	#pragma omp parallel for
 	for (int i = 0; i < adv_rows_to_elim_size; ++i)
 	{
 		if (adv_rows_to_elim[i].was_sent == 1)
