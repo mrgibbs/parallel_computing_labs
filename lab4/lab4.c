@@ -275,20 +275,169 @@ int main (int argc, char* argv[])
 
 
 
-	// //print all rows
-	// for (int i = 0; i < PROCS_AMOUNT; ++i)
-	// {
-	// 	MPI_Barrier(MPI_COMM_WORLD);
-	// 	if (rank == i)
-	// 	{
-	// 		printf("\n\n\nproc #%d    iter #%d:\n", rank, iterations_completed);
-	// 		for (int i = 0; i < rows_amount; ++i)
-	// 		{
-	// 			print_advanced_row(adv_rows[i]);	
-	// 		}
-	// 	}
-	// }
+	//print all rows
+	for (int i = 0; i < PROCS_AMOUNT; ++i)
+	{
+		MPI_Barrier(MPI_COMM_WORLD);
+		if (rank == i)
+		{
+			printf("\n\n\nproc #%d    iter #%d:\n", rank, iterations_completed);
+			for (int i = 0; i < rows_amount; ++i)
+			{
+				print_advanced_row(adv_rows[i]);	
+			}
+		}
+	}
 	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	int second_part_iters_amount = MATRIX_SIZE - 1;  //amount of iterations to make matrix diagonal with 1s 
+							//identity matrix
+							//it will be easy to find answers
+
+	for (int second_part_iter = second_part_iters_amount; second_part_iter > 0; --second_part_iter)
+	{
+		int is_there_appropriate_row = 0;   //variable defines is there row to be sent in current process
+											//appropriate row is row that has all values zeros 
+											//except one that is equal to 1
+
+		int appropriate_row_index = -1;
+		double b_to_sent;   //free member   (in equations A.x=b     it's element of vector b)
+
+		for (int i = 0; i < rows_amount; ++i)
+		{
+			if (adv_rows[i].iters_passed == second_part_iter)
+			{
+				is_there_appropriate_row = 1;
+				appropriate_row_index = i;
+				adv_rows[i].was_sent = 2;
+				b_to_sent = adv_rows[i].row[ROW_SIZE - 1];
+				break;
+			}
+		}
+
+		int* can_procs_be_senders;   //variable is used in process #0. 
+									//it's array, if arr[i] = 1 then proc #i has appropriate row
+
+		if (rank == 0)
+		{
+			can_procs_be_senders = allocate(int, PROCS_AMOUNT);
+
+		}
+
+		//printf("proc #%d before gather_1   is_app_row: %d\n", rank, is_there_appropriate_row);  //debugging
+
+
+		MPI_Gather(&is_there_appropriate_row, 1, MPI_INT,
+					can_procs_be_senders, 1, MPI_INT,
+					0, MPI_COMM_WORLD);
+
+
+		// printf("proc #%d after gather_1\n", rank);  //debugging
+
+
+		int proc_checked_to_send_row; // checks if this proc is checked for sending row to others
+
+
+		if(rank == 0) 
+		{
+			for (int i = 0; i < PROCS_AMOUNT; ++i)
+			{
+				if (can_procs_be_senders[i] == 1)
+				{
+					proc_checked_to_send_row = i;
+					break;
+				}
+			}
+			
+		}  
+
+		// printf("proc #%d before bcast_1\n", rank);  //debugging
+
+		MPI_Bcast(&proc_checked_to_send_row, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+
+		MPI_Bcast(&b_to_sent, 1, MPI_DOUBLE, proc_checked_to_send_row, MPI_COMM_WORLD);
+
+		for (int i = 0; i < rows_amount; ++i)
+		{
+			if (adv_rows[i].was_sent == 2)
+			{
+				continue;
+			}
+			double* cur_row = adv_rows[i].row;
+
+			double coef = -cur_row[second_part_iter];
+			cur_row[second_part_iter] = 0.0;
+			// printf("b_to_sent = %lf\n", b_to_sent);
+			cur_row[ROW_SIZE - 1] += b_to_sent * coef;   //adding to element of vector of free members
+		}
+
+		// printf("proc #%d after bcast_1\n", rank);  //debugging
+
+
+		//print all rows
+		for (int i = 0; i < PROCS_AMOUNT; ++i)
+		{
+			MPI_Barrier(MPI_COMM_WORLD);
+			if (rank == i)
+			{
+				printf("\n\n\nproc #%d    iter #%d:\n", rank, iterations_completed);
+				for (int i = 0; i < rows_amount; ++i)
+				{
+					print_advanced_row(adv_rows[i]);	
+				}
+			}
+		}
+
+		iterations_completed++;
+	}
+
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (rank == 0)
+	{
+		printf("\n\n\nResults:\n");
+	}	
+	for (int i = 0; i < MATRIX_SIZE; ++i)
+	{
+		MPI_Barrier(MPI_COMM_WORLD);
+		for (int j = 0; j < rows_amount; ++j)
+		{
+			if (adv_rows[j].iters_passed == i)
+			{
+				printf("x%d = %lf\n", i, adv_rows[j].row[ROW_SIZE - 1]);
+			}	
+		}
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
